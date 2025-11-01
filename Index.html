@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <!-- 
+    This is a standalone HTML file.
+    It does NOT use google.script.run
+  -->
+  <title>Standalone Calculator</title>
+  
+  <!-- Using Tailwind CSS for easy styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* A simple CSS class for all buttons */
+    .calc-btn {
+      @apply w-full h-16 text-2xl font-bold bg-gray-200 rounded-lg shadow-md transition-all duration-150 hover:bg-gray-300 active:shadow-inner;
+    }
+    .op-btn {
+      @apply bg-orange-400 text-white hover:bg-orange-500;
+    }
+    .eq-btn {
+      @apply bg-green-500 text-white hover:bg-green-600;
+    }
+    .c-btn {
+      @apply bg-red-500 text-white hover:bg-red-600;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen font-sans">
+
+  <div class="w-full max-w-xs p-4 bg-white rounded-2xl shadow-xl">
+    <h1 class="text-2xl font-bold text-center text-gray-700 mb-4">Calculator</h1>
+    
+    <!-- Display Screen -->
+    <div id="display" class="w-full h-20 bg-gray-800 text-white text-4xl text-right p-4 rounded-lg mb-4 flex items-center justify-end overflow-hidden">
+      0
+    </div>
+
+    <!-- Button Grid -->
+    <div class="grid grid-cols-4 gap-2">
+      <button class="calc-btn c-btn col-span-2" onclick="clearDisplay()">C</button>
+      <button class="calc-btn op-btn" onclick="pressKey('/')">÷</button>
+      <button class="calc-btn op-btn" onclick="pressKey('*')">×</button>
+      
+      <button class="calc-btn" onclick="pressKey('7')">7</button>
+      <button class="calc-btn" onclick="pressKey('8')">8</button>
+      <button class="calc-btn" onclick="pressKey('9')">9</button>
+      <button class="calc-btn op-btn" onclick="pressKey('-')">−</button>
+      
+      <button class="calc-btn" onclick="pressKey('4')">4</button>
+      <button class="calc-btn" onclick="pressKey('5')">5</button>
+      <button class="calc-btn" onclick="pressKey('6')">6</button>
+      <button class="calc-btn op-btn" onclick="pressKey('+')">+</button>
+      
+      <button class="calc-btn" onclick="pressKey('1')">1</button>
+      <button class="calc-btn" onclick="pressKey('2')">2</button>
+      <button class="calc-btn" onclick="pressKey('3')">3</button>
+      <button class="calc-btn eq-btn row-span-2" onclick="calculate()">=</button>
+      
+      <button class="calc-btn col-span-2" onclick="pressKey('0')">0</button>
+      <button class="calc-btn" onclick="pressKey('.')">.</button>
+    </div>
+    
+    <div id="status" class="text-center text-sm text-gray-500 mt-2 h-4"></div>
+  </div>
+
+  <script>
+    /**
+     * ! IMPORTANT:
+     * Paste your DEPLOYED WEB APP URL from Step 2 of the guide here.
+     */
+    const API_URL = "https://script.google.com/macros/s/AKfycbxcGNfX2HR3Q2bvvtuOBfZkl6ZOJCock9ev3W63sXWRidjWNYpwXJJUwJj6rQFFJQ8Bxw/exec";
+
+    let currentInput = '0';
+    let operator = null;
+    let firstOperand = null;
+
+    const display = document.getElementById('display');
+    const status = document.getElementById('status');
+
+    function updateDisplay() {
+      display.textContent = currentInput;
+    }
+
+    function pressKey(key) {
+      if (['+', '-', '*', '/'].includes(key)) {
+        if (operator && firstOperand) {
+          calculate(); // Chain operations
+        }
+        operator = key;
+        firstOperand = currentInput;
+        currentInput = '0';
+      } else if (key === '.') {
+        if (!currentInput.includes('.')) {
+          currentInput += '.';
+        }
+      } else {
+        if (currentInput === '0') {
+          currentInput = key;
+        } else {
+          currentInput += key;
+        }
+      }
+      updateDisplay();
+    }
+
+    function clearDisplay() {
+      currentInput = '0';
+      operator = null;
+      firstOperand = null;
+      updateDisplay();
+      status.textContent = '';
+    }
+
+    function calculate() {
+      if (!operator || firstOperand === null) return;
+      if (API_URL === "PASTE_YOUR_DEPLOYED_WEB_APP_URL_HERE") {
+        status.textContent = "Error: API_URL is not set.";
+        return;
+      }
+
+      let result;
+      const first = parseFloat(firstOperand);
+      const second = parseFloat(currentInput);
+
+      switch (operator) {
+        case '+': result = first + second; break;
+        case '-': result = first - second; break;
+        case '*': result = first * second; break;
+        case '/': result = first / second; break;
+        default: return;
+      }
+      
+      const logEntry = `${firstOperand} ${operator} ${currentInput} = ${result}`;
+      currentInput = String(result);
+      operator = null;
+      firstOperand = null;
+      
+      updateDisplay();
+      
+      // *** THIS IS THE NEW PART ***
+      // Log the calculation to the Google Sheet using fetch()
+      status.textContent = 'Logging...';
+      
+      const postData = {
+        action: "log",
+        payload: logEntry
+      };
+      
+      fetch(API_URL, {
+        method: "POST",
+        // 'mode: "no-cors"' is often needed for simple Apps Script APIs
+        // but it prevents reading the response.
+        // A full "cors" setup is better but more complex.
+        // For this guide, we'll send the data and hope for the best.
+        // A proper redirect is needed for a clean response.
+        // Let's try the standard way first.
+        body: JSON.stringify(postData),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          onLogSuccess(data.message);
+        } else {
+          onLogFailure(new Error(data.message));
+        }
+      })
+      .catch(onLogFailure);
+    }
+    
+    function onLogSuccess(response) {
+      status.textContent = 'Saved to Sheet!';
+      console.log(response);
+    }
+    
+    function onLogFailure(error) {
+      status.textContent = 'Log failed.';
+      console.error(error);
+    }
+
+  </script>
+</body>
+</html>
